@@ -391,6 +391,17 @@ if (planUsage?.sevenDay != null) {
   lines.push(`${L('7D')}${colorBar(pct7)}`);
 }
 
+// NOW
+{
+  const now = new Date();
+  const y = now.getFullYear();
+  const mo = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  const h = String(now.getHours()).padStart(2, '0');
+  const mi = String(now.getMinutes()).padStart(2, '0');
+  lines.push(`${L('NOW')}${y}-${mo}-${d} ${h}:${mi}`);
+}
+
 // UP
 const durationMs = data.cost?.total_duration_ms ?? null;
 if (durationMs != null && durationMs > 0) {
