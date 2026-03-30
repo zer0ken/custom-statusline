@@ -340,7 +340,7 @@ for (const proj of projectGits) {
 // LLM
 lines.push(`${L('LLM')}${model}`);
 
-// CTX
+// CTX / 5H / 7D (사용량 섹션)
 {
   const pct = ctxPct != null ? Number(ctxPct) : 0;
   const acTrigger = 84;
@@ -355,21 +355,6 @@ lines.push(`${L('LLM')}${model}`);
   }
   lines.push(ctx);
 }
-
-// ORG
-if (identity) lines.push(`${L('ORG')}${identity}`);
-
-// PLN
-if (subscriptionType) {
-  let planStr = subscriptionType;
-  if (rateLimitTier) {
-    const tier = rateLimitTier.replace('default_claude_', '').replace(/_/g, ' ').trim();
-    if (tier && tier !== subscriptionType) planStr += ` (${tier})`;
-  }
-  lines.push(`${L('PLN')}${planStr}`);
-}
-
-// 5H
 if (planUsage?.fiveHour != null) {
   const pct5 = Number(planUsage.fiveHour);
   let str = `${L('5H')}${colorBar(pct5)}`;
@@ -384,14 +369,13 @@ if (planUsage?.fiveHour != null) {
   }
   lines.push(str);
 }
-
-// 7D
 if (planUsage?.sevenDay != null) {
   const pct7 = Number(planUsage.sevenDay);
   lines.push(`${L('7D')}${colorBar(pct7)}`);
 }
 
-// NOW
+// NOW / UP / ORG / PLN (세션 정보 섹션)
+lines.push('\u200B');
 {
   const now = new Date();
   const y = now.getFullYear();
@@ -401,8 +385,6 @@ if (planUsage?.sevenDay != null) {
   const mi = String(now.getMinutes()).padStart(2, '0');
   lines.push(`${L('NOW')}${y}-${mo}-${d} ${h}:${mi}`);
 }
-
-// UP
 const durationMs = data.cost?.total_duration_ms ?? null;
 if (durationMs != null && durationMs > 0) {
   const totalMins = Math.floor(durationMs / 60000);
@@ -410,6 +392,15 @@ if (durationMs != null && durationMs > 0) {
   const m = totalMins % 60;
   lines.push(`${L('UP')}${hrs > 0 ? `${hrs}h ${m}m` : `${m}m`}`);
 }
+if (subscriptionType) {
+  let planStr = subscriptionType;
+  if (rateLimitTier) {
+    const tier = rateLimitTier.replace('default_claude_', '').replace(/_/g, ' ').trim();
+    if (tier && tier !== subscriptionType) planStr += ` (${tier})`;
+  }
+  lines.push(`${L('PLN')}${planStr}`);
+}
+if (identity) lines.push(`${L('ORG')}${identity}`);
 
 // ── Output ────────────────────────────────────────────────────
 process.stdout.write(lines.map(truncateLine).join('\n') + '\n');
