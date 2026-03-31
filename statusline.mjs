@@ -148,14 +148,6 @@ function getGit(cwd) {
     const branch = execSync('git branch --show-current', opts).trim();
     if (!branch) return null;
 
-    // 현재 워크트리 감지
-    let currentWt = null;
-    try {
-      const gitDir = execSync('git rev-parse --git-dir', opts).trim();
-      const wtMatch = gitDir.replace(/\\/g, '/').match(/\/worktrees\/([^/]+)$/);
-      if (wtMatch) currentWt = wtMatch[1];
-    } catch {}
-
     let added = 0, removed = 0;
     try {
       const numstat = execSync('git diff HEAD --numstat', opts).trim();
@@ -177,6 +169,7 @@ function getGit(cwd) {
 
     // 전체 워크트리 (main 포함, mtime 최신순)
     let worktreeNames = [];
+    let mainWtName = null;
     try {
       const wtList = execSync('git worktree list --porcelain', opts).trim();
       const entries = [];
@@ -184,7 +177,7 @@ function getGit(cwd) {
         const m = block.match(/^worktree (.+)$/m);
         if (!m) continue;
         const name = basename(m[1].replace(/\\/g, '/'));
-        if (!currentWt) currentWt = name; // main worktree = first entry
+        if (!mainWtName) mainWtName = name;
         let mtime = 0;
         try { mtime = statSync(m[1]).mtimeMs; } catch {}
         entries.push({ name, mtime });
@@ -193,7 +186,7 @@ function getGit(cwd) {
       worktreeNames = entries.map(e => e.name);
     } catch {}
 
-    return { branch, currentWt, worktreeNames, added, removed, ahead, behind };
+    return { branch, worktreeNames, mainWtName, added, removed, ahead, behind };
   } catch { return null; }
 }
 
@@ -331,18 +324,14 @@ const lines = [];
 for (const proj of projectGits) {
   lines.push(`${L('PRJ')}${proj.name}`);
   if (proj.git) {
-    // WKT: (current), other1, other2, +N / total
-    const current = proj.git.currentWt;
-    const others = proj.git.worktreeNames.filter(n => n !== current);
+    // WKT: name1, name2*, +N / total (* = main worktree)
     const total = proj.git.worktreeNames.length;
-    const MAX_SHOW = 2;
-    let wkt = `(${current})`;
-    if (others.length > 0) {
-      const shown = others.slice(0, MAX_SHOW);
-      wkt += ', ' + shown.join(', ');
-      const rest = others.length - shown.length;
-      if (rest > 0) wkt += `, +${rest}`;
-    }
+    const MAX_SHOW = 3;
+    const tagged = proj.git.worktreeNames.map(n => n === proj.git.mainWtName ? n + '*' : n);
+    const shown = tagged.slice(0, MAX_SHOW);
+    let wkt = shown.join(', ');
+    const rest = tagged.length - shown.length;
+    if (rest > 0) wkt += `, +${rest}`;
     wkt += ` / ${total}`;
     lines.push(`${L('WKT')}${wkt}`);
     // BR: branch + ahead/behind + diff
