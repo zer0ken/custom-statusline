@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 import { execSync } from 'child_process';
-import { readdirSync, readFileSync, writeFileSync, existsSync } from 'fs';
+import { readdirSync, readFileSync, writeFileSync, existsSync, statSync } from 'fs';
 import { join, basename } from 'path';
 import os from 'os';
 
@@ -148,13 +148,12 @@ function getGit(cwd) {
     const branch = execSync('git branch --show-current', opts).trim();
     if (!branch) return null;
 
-    // worktree 경로 감지: .git이 파일(worktree)인지 디렉토리(메인)인지 확인
-    let worktreeName = null;
+    // 현재 워크트리 감지
+    let currentWt = null;
     try {
       const gitDir = execSync('git rev-parse --git-dir', opts).trim();
-      // worktree의 경우 .git/worktrees/<name> 형태
       const wtMatch = gitDir.replace(/\\/g, '/').match(/\/worktrees\/([^/]+)$/);
-      if (wtMatch) worktreeName = wtMatch[1];
+      if (wtMatch) currentWt = wtMatch[1];
     } catch {}
 
     let added = 0, removed = 0;
@@ -176,14 +175,25 @@ function getGit(cwd) {
       ahead = parseInt(a) || 0;
     } catch {}
 
-    // worktree count
-    let worktreeCount = 0;
+    // 전체 워크트리 (main 포함, mtime 최신순)
+    let worktreeNames = [];
     try {
       const wtList = execSync('git worktree list --porcelain', opts).trim();
-      worktreeCount = (wtList.match(/^worktree /gm) || []).length - 1; // exclude main
+      const entries = [];
+      for (const block of wtList.split(/\n\n+/)) {
+        const m = block.match(/^worktree (.+)$/m);
+        if (!m) continue;
+        const name = basename(m[1].replace(/\\/g, '/'));
+        if (!currentWt) currentWt = name; // main worktree = first entry
+        let mtime = 0;
+        try { mtime = statSync(m[1]).mtimeMs; } catch {}
+        entries.push({ name, mtime });
+      }
+      entries.sort((a, b) => b.mtime - a.mtime);
+      worktreeNames = entries.map(e => e.name);
     } catch {}
 
-    return { branch, worktreeName, added, removed, ahead, behind, worktreeCount };
+    return { branch, currentWt, worktreeNames, added, removed, ahead, behind };
   } catch { return null; }
 }
 
@@ -321,10 +331,20 @@ const lines = [];
 for (const proj of projectGits) {
   lines.push(`${L('PRJ')}${proj.name}`);
   if (proj.git) {
-    // WKT: worktree name / total count (메인 포함)
-    const totalWt = (proj.git.worktreeCount || 0) + 1;
-    const wtName = proj.git.worktreeName || 'main';
-    lines.push(`${L('WKT')}${wtName} / ${totalWt}`);
+    // WKT: (current), other1, other2, +N / total
+    const current = proj.git.currentWt;
+    const others = proj.git.worktreeNames.filter(n => n !== current);
+    const total = proj.git.worktreeNames.length;
+    const MAX_SHOW = 2;
+    let wkt = `(${current})`;
+    if (others.length > 0) {
+      const shown = others.slice(0, MAX_SHOW);
+      wkt += ', ' + shown.join(', ');
+      const rest = others.length - shown.length;
+      if (rest > 0) wkt += `, +${rest}`;
+    }
+    wkt += ` / ${total}`;
+    lines.push(`${L('WKT')}${wkt}`);
     // BR: branch + ahead/behind + diff
     let br = `${L('BR')}${proj.git.branch}`;
     const ab = [];
