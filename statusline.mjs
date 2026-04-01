@@ -417,7 +417,8 @@ if (subscriptionType) {
   }
   lines.push(`${L('PLN')}${planStr}`);
 }
-if (identity) lines.push(`${L('ORG')}${identity}`);
+if (authInfo.email) lines.push(`${L('USR')}${authInfo.email}`);
+if (identity && identity !== authInfo.email) lines.push(`${L('ORG')}${identity}`);
 
 // ── Output ────────────────────────────────────────────────────
 process.stdout.write(lines.map(truncateLine).join('\n') + '\n');
