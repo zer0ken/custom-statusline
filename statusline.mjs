@@ -334,9 +334,17 @@ for (const proj of projectGits) {
   if (proj.git) {
     // WKT: name1, name2*, +N / total (* = main worktree)
     const total = proj.git.worktreeNames.length;
-    const MAX_SHOW = 3;
     const tagged = proj.git.worktreeNames.map(n => n === proj.git.mainWtName ? n + '*' : n);
-    const shown = tagged.slice(0, MAX_SHOW);
+    const cols = process.stdout.columns || 120;
+    const maxWktWidth = Math.floor(cols / 2);
+    // 3개 먼저 시도, 너무 길면 1개로 축소
+    let maxShow = 3;
+    let shown = tagged.slice(0, maxShow);
+    let trial = shown.join(', ');
+    if (stripAnsi(trial).length > maxWktWidth && maxShow > 1) {
+      maxShow = 1;
+      shown = tagged.slice(0, maxShow);
+    }
     let wkt = shown.join(', ');
     const rest = tagged.length - shown.length;
     if (rest > 0) wkt += `, +${rest}`;
