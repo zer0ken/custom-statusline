@@ -1,4 +1,4 @@
-#!/usr/bin/env bun
+#!/usr/bin/env node
 import { execSync } from 'child_process';
 import { readdirSync, readFileSync, writeFileSync, existsSync, statSync } from 'fs';
 import { join, basename } from 'path';
@@ -141,16 +141,24 @@ function getCosts() {
 }
 
 // ── Git 정보 ───────────────────────────────────────────────────
+function gitCmd(cwd) {
+  // /mnt/c/ 등 Windows 파일시스템에서는 git.exe가 훨씬 빠름
+  const dir = cwd || process.cwd();
+  if (dir.startsWith('/mnt/') && existsSync('/mnt/c/Program Files/Git/cmd/git.exe')) return 'git.exe';
+  return 'git';
+}
+
 function getGit(cwd) {
   const env = { ...process.env, GIT_OPTIONAL_LOCKS: '0' };
   const opts = { encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'], cwd: cwd || process.cwd(), env };
+  const git = gitCmd(opts.cwd);
   try {
-    const branch = execSync('git branch --show-current', opts).trim();
+    const branch = execSync(`${git} branch --show-current`, opts).trim();
     if (!branch) return null;
 
     let added = 0, removed = 0;
     try {
-      const numstat = execSync('git diff HEAD --numstat', opts).trim();
+      const numstat = execSync(`${git} diff HEAD --numstat`, opts).trim();
       for (const line of numstat.split('\n').filter(Boolean)) {
         const [a, r] = line.split('\t');
         added += parseInt(a) || 0;
@@ -161,7 +169,7 @@ function getGit(cwd) {
     // ahead/behind remote
     let ahead = 0, behind = 0;
     try {
-      const ab = execSync(`git rev-list --left-right --count @{upstream}...HEAD`, opts).trim();
+      const ab = execSync(`${git} rev-list --left-right --count @{upstream}...HEAD`, opts).trim();
       const [b, a] = ab.split(/\s+/);
       behind = parseInt(b) || 0;
       ahead = parseInt(a) || 0;
@@ -171,7 +179,7 @@ function getGit(cwd) {
     let worktreeNames = [];
     let mainWtName = null;
     try {
-      const wtList = execSync('git worktree list --porcelain', opts).trim();
+      const wtList = execSync(`${git} worktree list --porcelain`, opts).trim();
       const entries = [];
       for (const block of wtList.split(/\n\n+/)) {
         const m = block.match(/^worktree (.+)$/m);
